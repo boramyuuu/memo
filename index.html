@@ -140,6 +140,39 @@ html,body{height:100%;background:#f5f4ef;font-family:'Noto Sans KR',-apple-syste
 ::-webkit-scrollbar{width:5px;}
 ::-webkit-scrollbar-track{background:transparent;}
 ::-webkit-scrollbar-thumb{background:#d0cfc9;border-radius:3px;}
+
+#mobile-tab{display:none;position:fixed;bottom:0;left:0;right:0;height:56px;background:#f5f4ef;border-top:1px solid #dddcd6;z-index:100;flex-direction:row;align-items:center;justify-content:space-around;}
+.mtab-btn{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;cursor:pointer;color:#aaa;font-size:10px;padding:6px 0;border:none;background:none;font-family:inherit;}
+.mtab-btn .mtab-icon{font-size:20px;}
+.mtab-btn.active{color:#333;}
+#mobile-new-btn{width:44px;height:44px;border-radius:50%;background:#333;color:#fff;border:none;font-size:22px;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,0.15);}
+#mobile-back{display:none;align-items:center;gap:6px;padding:11px 16px;border-bottom:1px solid #dddcd6;background:#f5f4ef;cursor:pointer;font-size:14px;color:#555;flex-shrink:0;}
+
+@media(max-width:768px){
+  #leftnav{display:none;}
+  #sidebar{display:none;width:100%;position:fixed;inset:0;z-index:50;padding-bottom:56px;}
+  #sidebar.mob-show{display:flex;}
+  #notelist{display:none;width:100%;position:fixed;inset:0;z-index:40;padding-bottom:56px;}
+  #notelist.mob-show{display:flex;}
+  #editor{position:fixed;inset:0;z-index:30;padding-bottom:56px;display:none;}
+  #editor.mob-show{display:flex;}
+  #mobile-tab{display:flex;}
+  #mobile-back{display:flex;}
+  #editor-topbar{gap:4px;padding:8px 10px;overflow-x:auto;flex-wrap:nowrap;}
+  .etb-btn{padding:5px 8px;font-size:11px;white-space:nowrap;flex-shrink:0;}
+  #fmt-toolbar{overflow-x:auto;flex-wrap:nowrap;padding:6px 10px;}
+  .fmt-btn{flex-shrink:0;}
+  #editor-title{font-size:19px;}
+  #editor-title-area{padding:14px 16px 6px;}
+  #editor-meta-row{padding:0 16px 6px;}
+  #editor-tags{padding:4px 16px 8px;}
+  #img-area{padding:8px 16px 0;}
+  #editor-body{padding:10px 16px 20px;font-size:15px;}
+  #editor-status{padding:6px 16px;}
+  .note-card{padding:14px 16px;}
+  .nc-title{font-size:15px;}
+  .nc-preview{font-size:13px;}
+}
 </style>
 </head>
 <body>
@@ -199,6 +232,23 @@ html,body{height:100%;background:#f5f4ef;font-family:'Noto Sans KR',-apple-syste
 
 <div id="lightbox" onclick="closeLb()"><span id="lb-close">✕</span><img id="lb-img" src="" alt=""/></div>
 <input type="file" id="img-input" accept="image/*" multiple style="display:none"/>
+
+<!-- 모바일 하단 탭바 -->
+<div id="mobile-tab">
+  <button class="mtab-btn active" id="mtab-notes" onclick="mobTab('notes')">
+    <span class="mtab-icon">📝</span><span>노트</span>
+  </button>
+  <button class="mtab-btn" id="mtab-nb" onclick="mobTab('nb')">
+    <span class="mtab-icon">📚</span><span>노트북</span>
+  </button>
+  <button id="mobile-new-btn" onclick="createNote()">＋</button>
+  <button class="mtab-btn" id="mtab-tags" onclick="mobTab('tags')">
+    <span class="mtab-icon">🏷</span><span>태그</span>
+  </button>
+  <button class="mtab-btn" id="mtab-search" onclick="mobTab('search')">
+    <span class="mtab-icon">🔍</span><span>검색</span>
+  </button>
+</div>
 
 <!-- Firebase SDK -->
 <script type="module">
@@ -366,7 +416,7 @@ function renderNoteList(){
       <div class="nc-preview">${esc(preview)||'내용 없음'}</div>
       <div class="nc-meta">${tagsHtml}${imgBadge}${!S.selNb&&nbName?`<span class="nc-nb">📓 ${esc(nbName)}</span>`:''}<span class="nc-date">${fmtShort(note.date)}</span></div>
     `;
-    card.onclick=()=>{S.selId=note.id;renderNoteList();renderEditor();};
+    card.onclick=()=>{S.selId=note.id;renderNoteList();renderEditor();if(isMobile())mobTab('editor');if(isMobile())renderEditorWithBack();};
     list.appendChild(card);
   });
 }
@@ -501,7 +551,8 @@ window.createNote=function(){
   const note={id:uid(),nbId:S.selNb||S.notebooks[0]?.id||'',title:'',content:'',tags:[],images:[],date:new Date().toISOString(),starred:false};
   S.selId=note.id;
   saveNote(note);
-  setTimeout(()=>document.getElementById('editor-title')?.focus(),300);
+  if(isMobile()){mobTab('editor');setTimeout(()=>{renderEditorWithBack();document.getElementById('editor-title')?.focus();},300);}
+  else{setTimeout(()=>document.getElementById('editor-title')?.focus(),300);}
 };
 window.addNotebook=function(){
   const name=prompt('노트북 이름:');if(!name?.trim())return;
@@ -523,7 +574,61 @@ document.getElementById('sb-all').onclick=()=>{S.selNb=null;S.selTag=null;S.sbQ=
 document.getElementById('sb-search').oninput=e=>{S.sbQ=e.target.value;S.selNb=null;S.selTag=null;setActiveSb(document.getElementById('sb-all'));renderNoteList();};
 document.getElementById('notelist-search').oninput=e=>{S.listQ=e.target.value;renderNoteList();};
 
+// ── 모바일 탭 전환 ──
+const isMobile=()=>window.innerWidth<=768;
+
+window.mobTab=function(tab){
+  if(!isMobile())return;
+  document.querySelectorAll('.mtab-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('sidebar').classList.remove('mob-show');
+  document.getElementById('notelist').classList.remove('mob-show');
+  document.getElementById('editor').classList.remove('mob-show');
+  if(tab==='notes'){
+    document.getElementById('notelist').classList.add('mob-show');
+    document.getElementById('mtab-notes')?.classList.add('active');
+  } else if(tab==='nb'||tab==='tags'||tab==='search'){
+    document.getElementById('sidebar').classList.add('mob-show');
+    document.getElementById('mtab-'+tab==='nb'?'nb':tab==='tags'?'tags':'search')?.classList.add('active');
+    if(tab==='search')setTimeout(()=>document.getElementById('sb-search')?.focus(),100);
+  } else if(tab==='editor'){
+    document.getElementById('editor').classList.add('mob-show');
+  }
+};
+
+// 모바일에서 노트 클릭 시 에디터로 이동
+const origRenderNoteList=renderNoteList;
+function renderNoteListWithMob(){
+  origRenderNoteList();
+  if(!isMobile())return;
+  document.querySelectorAll('.note-card').forEach(card=>{
+    const orig=card.onclick;
+    card.onclick=e=>{orig&&orig(e);if(isMobile())mobTab('editor');};
+  });
+}
+
+// 모바일 초기화
+function initMobile(){
+  if(!isMobile())return;
+  document.getElementById('notelist').classList.add('mob-show');
+  document.getElementById('mtab-notes')?.classList.add('active');
+}
+
+// 에디터에 뒤로가기 버튼 삽입
+const origRenderEditor=renderEditor;
+function renderEditorWithBack(){
+  origRenderEditor();
+  if(!isMobile())return;
+  const panel=document.getElementById('editor');
+  if(!panel)return;
+  const back=document.createElement('div');
+  back.id='mobile-back';
+  back.innerHTML='◀ 노트 목록';
+  back.onclick=()=>mobTab('notes');
+  panel.insertBefore(back,panel.firstChild);
+}
+
 startSync();
+initMobile();
 </script>
 </body>
 </html>
